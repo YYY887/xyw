@@ -93,6 +93,14 @@ jobs:
       - name: 生成 iOS 原生工程
         run: npx expo prebuild --platform ios --non-interactive --clean
 
+      - name: 固定 Xcode Node 环境
+        run: |
+          NODE_PATH="$(node -p 'process.execPath')"
+          cat > ios/.xcode.env.local <<EOF
+          export NODE_BINARY="$NODE_PATH"
+          EOF
+          echo "Xcode NODE_BINARY=$NODE_PATH"
+
       - name: 安装 CocoaPods
         run: |
           if [ -f ios/Podfile ]; then
