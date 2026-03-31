@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "千秋WIFI",
+    "slug": "wifi-assistant-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.example.wifiassistant"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#000000"
+      },
+      "package": "com.example.wifiassistant"
+    },
+    "extra": {
+      "portalUrl": "http://1.1.1.1:8888/webauth.do",
+      "speedTestUrl": "http://1.1.1.1:8888/webauth.do"
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#0071e3"
+        }
+      ]
+    ]
+  }
+}
