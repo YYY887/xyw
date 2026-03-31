@@ -308,14 +308,17 @@ jobs:
             tail -n 200 "$EXPORT_LOG" || true
             exit "$EXPORT_STATUS"
           fi
-          
+
+          echo "导出目录文件:"
+          find "$RUNNER_TEMP/ipa" -maxdepth 2 -type f | sort
+
           echo "✅ 已签名 IPA 已生成"
 
       - name: 上传 IPA
         uses: actions/upload-artifact@v4
         with:
           name: signed-ipa
-          path: ${{ runner.temp }}/ipa/App.ipa
+          path: ${{ runner.temp }}/ipa/*.ipa
 
       - name: 上传构建日志
         if: always()
