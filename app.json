@@ -13,7 +13,7 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.example.wifiassistant"
+      "bundleIdentifier": "wb.uniysc1547.tool1"
     },
     "android": {
       "adaptiveIcon": {
