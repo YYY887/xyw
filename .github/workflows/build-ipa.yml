@@ -51,11 +51,33 @@ jobs:
 
       - name: 读取证书与描述文件
         run: |
-          CERT_DIR="${{ secrets.CERT_DIR }}"
-          
-          P12_PATH="$(ls "$CERT_DIR"/*.p12 2>/dev/null | head -n 1)"
-          PROFILE_PATH="$(ls "$CERT_DIR"/*.mobileprovision 2>/dev/null | head -n 1)"
-          PASSWORD_FILE="$(ls "$CERT_DIR"/密码*.txt "$CERT_DIR"/*password*.txt 2>/dev/null | head -n 1)"
+          RAW_CERT_DIR="${{ secrets.CERT_DIR }}"
+
+          if [ -n "$RAW_CERT_DIR" ]; then
+            case "$RAW_CERT_DIR" in
+              /*) CERT_DIR="$RAW_CERT_DIR" ;;
+              *) CERT_DIR="$GITHUB_WORKSPACE/$RAW_CERT_DIR" ;;
+            esac
+          else
+            CERT_DIR="$(find "$GITHUB_WORKSPACE" -maxdepth 2 -type d | while read -r dir; do
+              if find "$dir" -maxdepth 1 -type f -name '*.p12' | grep -q . &&
+                 find "$dir" -maxdepth 1 -type f -name '*.mobileprovision' | grep -q . &&
+                 find "$dir" -maxdepth 1 -type f \( -name '密码*.txt' -o -iname '*password*.txt' \) | grep -q .; then
+                echo "$dir"
+              fi
+            done | head -n 1)"
+          fi
+
+          if [ -z "$CERT_DIR" ] || [ ! -d "$CERT_DIR" ]; then
+            echo "未找到证书目录。请将 CERT_DIR 设为仓库内证书目录名，或在仓库根目录保留唯一一个证书目录。"
+            exit 1
+          fi
+
+          echo "使用证书目录: $CERT_DIR"
+
+          P12_PATH="$(find "$CERT_DIR" -maxdepth 1 -type f -name '*.p12' | head -n 1)"
+          PROFILE_PATH="$(find "$CERT_DIR" -maxdepth 1 -type f -name '*.mobileprovision' | head -n 1)"
+          PASSWORD_FILE="$(find "$CERT_DIR" -maxdepth 1 -type f \( -name '密码*.txt' -o -iname '*password*.txt' \) | head -n 1)"
           
           if [ ! -f "$P12_PATH" ] || [ ! -f "$PROFILE_PATH" ] || [ ! -f "$PASSWORD_FILE" ]; then
             echo "证书文件不完整，请确认目录下包含 p12、mobileprovision 和 密码.txt"
