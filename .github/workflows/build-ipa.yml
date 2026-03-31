@@ -118,8 +118,16 @@ jobs:
           export PLATFORM_NAME="iphoneos"
           export SKIP_BUNDLING=0
           export USE_HERMES=1
+          export BUNDLE_OUTPUT="$RUNNER_TEMP/preflight/main.jsbundle"
+          export ASSETS_DEST="$RUNNER_TEMP/preflight"
+          mkdir -p "$ASSETS_DEST"
           echo "ENTRY_FILE=$ENTRY_FILE"
-          "$NODE_BINARY" "$CLI_PATH" export:embed --platform ios --dev false
+          "$NODE_BINARY" "$CLI_PATH" export:embed \
+            --platform ios \
+            --dev false \
+            --entry-file "$ENTRY_FILE" \
+            --bundle-output "$BUNDLE_OUTPUT" \
+            --assets-dest "$ASSETS_DEST"
 
       - name: 调整 Pod 编译参数
         run: |
