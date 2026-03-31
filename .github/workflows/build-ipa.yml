@@ -131,13 +131,13 @@ jobs:
           cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
           
           if [ "$GET_TASK_ALLOW" = "true" ]; then
-            EXPORT_METHOD="development"
+            EXPORT_METHOD="debugging"
           elif [ "$PROVISIONS_ALL" = "true" ]; then
             EXPORT_METHOD="enterprise"
           elif [ -n "$HAS_DEVICES" ]; then
-            EXPORT_METHOD="ad-hoc"
+            EXPORT_METHOD="release-testing"
           else
-            EXPORT_METHOD="app-store"
+            EXPORT_METHOD="app-store-connect"
           fi
           
           SIGN_IDENTITY="$(security find-identity -v -p codesigning build.keychain | awk -F'"' '/"/ {print $2; exit}')"
@@ -182,13 +182,16 @@ jobs:
         run: |
           WORKSPACE="$(find ios -maxdepth 1 -name '*.xcworkspace' | head -n 1)"
           PROJECT="$(find ios -maxdepth 1 -name '*.xcodeproj' | head -n 1)"
+          PROJECT_BASENAME="$(basename "${PROJECT:-}" .xcodeproj)"
+          WORKSPACE_BASENAME="$(basename "${WORKSPACE:-}" .xcworkspace)"
+          SHARED_SCHEME="$(find ios -path '*/xcshareddata/xcschemes/*.xcscheme' ! -path '*/Pods/*' -exec basename {} .xcscheme \; | ruby -e 'schemes = STDIN.read.split("\n").map(&:strip).reject(&:empty?).uniq; pod_like = /\A(Pods-|Expo|React|EX|hermes|FBLazyVector|RCT|RN|Yoga|glog|fmt|DoubleConversion|SocketRocket|boost)/i; preferred = schemes.find { |name| name !~ pod_like } || schemes.first; puts((preferred || "").to_s)')"
           
           if [ -n "$WORKSPACE" ]; then
-            SCHEME="$(xcodebuild -list -json -workspace "$WORKSPACE" | ruby -rjson -e 'data = JSON.parse(STDIN.read); schemes = data.dig("workspace", "schemes") || data.dig("project", "schemes") || []; preferred = schemes.find { |name| !name.start_with?("Pods-", "Expo", "React", "EX", "hermes") } || schemes.first; puts((preferred || "").to_s)')"
+            SCHEME="$(xcodebuild -list -json -workspace "$WORKSPACE" | ruby -rjson -e 'data = JSON.parse(STDIN.read); schemes = data.dig("workspace", "schemes") || data.dig("project", "schemes") || []; candidates = [ENV["PROJECT_BASENAME"], ENV["WORKSPACE_BASENAME"], ENV["SHARED_SCHEME"]].reject(&:nil?).reject(&:empty?); pod_like = /\A(Pods-|Expo|React|EX|hermes|FBLazyVector|RCT|RN|Yoga|glog|fmt|DoubleConversion|SocketRocket|boost)/i; preferred = candidates.find { |name| schemes.include?(name) } || schemes.find { |name| name !~ pod_like } || schemes.first; puts((preferred || "").to_s)')"
             echo "XCODE_CONTAINER=$WORKSPACE" >> $GITHUB_ENV
             echo "XCODE_CONTAINER_KIND=workspace" >> $GITHUB_ENV
           elif [ -n "$PROJECT" ]; then
-            SCHEME="$(xcodebuild -list -json -project "$PROJECT" | ruby -rjson -e 'data = JSON.parse(STDIN.read); schemes = data.dig("project", "schemes") || data.dig("workspace", "schemes") || []; preferred = schemes.find { |name| !name.start_with?("Pods-", "Expo", "React", "EX", "hermes") } || schemes.first; puts((preferred || "").to_s)')"
+            SCHEME="$(xcodebuild -list -json -project "$PROJECT" | ruby -rjson -e 'data = JSON.parse(STDIN.read); schemes = data.dig("project", "schemes") || data.dig("workspace", "schemes") || []; candidates = [ENV["PROJECT_BASENAME"], ENV["WORKSPACE_BASENAME"], ENV["SHARED_SCHEME"]].reject(&:nil?).reject(&:empty?); pod_like = /\A(Pods-|Expo|React|EX|hermes|FBLazyVector|RCT|RN|Yoga|glog|fmt|DoubleConversion|SocketRocket|boost)/i; preferred = candidates.find { |name| schemes.include?(name) } || schemes.find { |name| name !~ pod_like } || schemes.first; puts((preferred || "").to_s)')"
             echo "XCODE_CONTAINER=$PROJECT" >> $GITHUB_ENV
             echo "XCODE_CONTAINER_KIND=project" >> $GITHUB_ENV
           else
@@ -196,8 +199,8 @@ jobs:
             exit 1
           fi
           
-          if [ -z "$SCHEME" ]; then
-            SCHEME="$(find ios -path '*/xcshareddata/xcschemes/*.xcscheme' -exec basename {} .xcscheme \; | ruby -e 'schemes = STDIN.read.split("\n"); preferred = schemes.find { |name| !name.start_with?("Pods-", "Expo", "React", "EX", "hermes") } || schemes.first; puts((preferred || "").to_s)')"
+          if [ -z "$SCHEME" ] && [ -n "$SHARED_SCHEME" ]; then
+            SCHEME="$SHARED_SCHEME"
           fi
           
           if [ -z "$SCHEME" ]; then
