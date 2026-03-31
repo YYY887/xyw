@@ -222,8 +222,11 @@ jobs:
       - name: 构建已签名 Archive
         run: |
           ARCHIVE_PATH="$RUNNER_TEMP/App.xcarchive"
+          ARCHIVE_LOG="$RUNNER_TEMP/xcodebuild-archive.log"
           echo "ARCHIVE_PATH=$ARCHIVE_PATH" >> $GITHUB_ENV
+          echo "ARCHIVE_LOG=$ARCHIVE_LOG" >> $GITHUB_ENV
           
+          set -o pipefail
           if [ "$XCODE_CONTAINER_KIND" = "workspace" ]; then
             xcodebuild archive \
               -workspace "$XCODE_CONTAINER" \
@@ -234,7 +237,8 @@ jobs:
               CODE_SIGN_STYLE=Manual \
               CODE_SIGN_IDENTITY="$SIGN_IDENTITY" \
               DEVELOPMENT_TEAM="$TEAM_ID" \
-              PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME"
+              PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" \
+              2>&1 | tee "$ARCHIVE_LOG"
           else
             xcodebuild archive \
               -project "$XCODE_CONTAINER" \
@@ -245,15 +249,35 @@ jobs:
               CODE_SIGN_STYLE=Manual \
               CODE_SIGN_IDENTITY="$SIGN_IDENTITY" \
               DEVELOPMENT_TEAM="$TEAM_ID" \
-              PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME"
+              PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" \
+              2>&1 | tee "$ARCHIVE_LOG"
+          fi
+
+          ARCHIVE_STATUS=$?
+          if [ "$ARCHIVE_STATUS" -ne 0 ]; then
+            echo "Archive failed, showing last 200 log lines"
+            tail -n 200 "$ARCHIVE_LOG" || true
+            exit "$ARCHIVE_STATUS"
           fi
 
       - name: 导出已签名 IPA
         run: |
+          EXPORT_LOG="$RUNNER_TEMP/xcodebuild-export.log"
+          echo "EXPORT_LOG=$EXPORT_LOG" >> $GITHUB_ENV
+
+          set -o pipefail
           xcodebuild -exportArchive \
             -archivePath "$ARCHIVE_PATH" \
             -exportPath "$RUNNER_TEMP/ipa" \
-            -exportOptionsPlist "$RUNNER_TEMP/exportOptions.plist"
+            -exportOptionsPlist "$RUNNER_TEMP/exportOptions.plist" \
+            2>&1 | tee "$EXPORT_LOG"
+
+          EXPORT_STATUS=$?
+          if [ "$EXPORT_STATUS" -ne 0 ]; then
+            echo "Export failed, showing last 200 log lines"
+            tail -n 200 "$EXPORT_LOG" || true
+            exit "$EXPORT_STATUS"
+          fi
           
           echo "✅ 已签名 IPA 已生成"
 
@@ -262,3 +286,12 @@ jobs:
         with:
           name: signed-ipa
           path: ${{ runner.temp }}/ipa/App.ipa
+
+      - name: 上传构建日志
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-logs
+          path: |
+            ${{ runner.temp }}/xcodebuild-archive.log
+            ${{ runner.temp }}/xcodebuild-export.log
