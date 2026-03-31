@@ -27,28 +27,6 @@ jobs:
       - name: 安装依赖
         run: npm install --legacy-peer-deps
 
-      - name: 生成 iOS 原生工程
-        run: npx expo prebuild --platform ios --non-interactive --clean
-
-      - name: 安装 CocoaPods
-        run: |
-          if [ -f ios/Podfile ]; then
-            pod install --project-directory=ios
-          fi
-
-      - name: 调整 Pod 编译参数
-        run: |
-          if [ -f "ios/Pods/Target Support Files/ZXingObjC/ZXingObjC.debug.xcconfig" ]; then
-            ruby -e 'Dir["ios/Pods/Target Support Files/**/*.xcconfig"].each do |path|
-              content = File.read(path)
-              content.gsub!(/-Werror=non-modular-include-in-framework-module/, "-Wno-non-modular-include-in-framework-module")
-              content.gsub!(/-Werror=return-type/, "-Wno-error=return-type")
-              content.gsub!(/-Werror=deprecated-objc-isa-usage/, "-Wno-error=deprecated-objc-isa-usage")
-              content.gsub!(/-Werror=objc-root-class/, "-Wno-error=objc-root-class")
-              File.write(path, content)
-            end'
-          fi
-
       - name: 读取证书与描述文件
         run: |
           RAW_CERT_DIR="${{ secrets.CERT_DIR }}"
@@ -93,17 +71,46 @@ jobs:
           
           # 从描述文件中获取 App ID（bundleIdentifier）
           PROFILE_INFO="$(security cms -D -i "$PROFILE_PATH")"
-          APP_ID="$(echo "$PROFILE_INFO" | /usr/libexec/PlistBuddy -c 'Print Entitlements:application-identifier' /dev/stdin | sed 's/.*\.//')"
+          APPLICATION_IDENTIFIER="$(echo "$PROFILE_INFO" | /usr/libexec/PlistBuddy -c 'Print Entitlements:application-identifier' /dev/stdin)"
+          APP_ID="$(echo "$APPLICATION_IDENTIFIER" | sed 's/^[^.]*\.//')"
           
-          if [ -z "$APP_ID" ]; then
-            echo "未从描述文件中获取到 App ID"
+          if [ -z "$APPLICATION_IDENTIFIER" ] || [ -z "$APP_ID" ] || [ "$APP_ID" = "$APPLICATION_IDENTIFIER" ] || [ "$APP_ID" = "*" ]; then
+            echo "未从描述文件中正确解析出 bundle identifier"
             exit 1
           fi
           
+          echo "APPLICATION_IDENTIFIER=$APPLICATION_IDENTIFIER" >> $GITHUB_ENV
           echo "APP_ID=$APP_ID" >> $GITHUB_ENV
           echo "P12_PATH=$P12_PATH" >> $GITHUB_ENV
           echo "PROFILE_PATH=$PROFILE_PATH" >> $GITHUB_ENV
           echo "P12_PASSWORD=$P12_PASSWORD" >> $GITHUB_ENV
+
+      - name: 同步 iOS Bundle Identifier
+        run: |
+          node -e 'const fs = require("fs"); const path = "app.json"; const data = JSON.parse(fs.readFileSync(path, "utf8")); data.expo ||= {}; data.expo.ios ||= {}; data.expo.ios.bundleIdentifier = process.env.APP_ID; fs.writeFileSync(path, JSON.stringify(data, null, 2) + "\n");'
+          echo "已将 iOS bundleIdentifier 同步为: $APP_ID"
+
+      - name: 生成 iOS 原生工程
+        run: npx expo prebuild --platform ios --non-interactive --clean
+
+      - name: 安装 CocoaPods
+        run: |
+          if [ -f ios/Podfile ]; then
+            pod install --project-directory=ios
+          fi
+
+      - name: 调整 Pod 编译参数
+        run: |
+          if [ -f "ios/Pods/Target Support Files/ZXingObjC/ZXingObjC.debug.xcconfig" ]; then
+            ruby -e 'Dir["ios/Pods/Target Support Files/**/*.xcconfig"].each do |path|
+              content = File.read(path)
+              content.gsub!(/-Werror=non-modular-include-in-framework-module/, "-Wno-non-modular-include-in-framework-module")
+              content.gsub!(/-Werror=return-type/, "-Wno-error=return-type")
+              content.gsub!(/-Werror=deprecated-objc-isa-usage/, "-Wno-error=deprecated-objc-isa-usage")
+              content.gsub!(/-Werror=objc-root-class/, "-Wno-error=objc-root-class")
+              File.write(path, content)
+            end'
+          fi
 
       - name: 导入证书并安装描述文件
         run: |
